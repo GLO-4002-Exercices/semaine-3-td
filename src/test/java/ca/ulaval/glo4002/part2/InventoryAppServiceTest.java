@@ -1,11 +1,16 @@
 package ca.ulaval.glo4002.part2;
 
-import java.util.List;
-
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
-import static org.mockito.Mockito.mock;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.willReturn;
+import static org.mockito.Mockito.*;
 
 class InventoryAppServiceTest {
     private static final String A_PRODUCT_NAME = "laptop";
@@ -24,47 +29,53 @@ class InventoryAppServiceTest {
 
     @Test
     void whenSearchingProducts_thenSearchesInTheStorageByName() {
-        // given: the repository will have to at least return an empty list to make this work.
+        willReturn(List.of()).given(repository).findByName(anyString());
 
         service.searchProducts(A_PRODUCT_NAME);
 
-        // assert that the repository is called properly
+        Mockito.verify(repository).findByName(A_PRODUCT_NAME);
     }
 
     @Test
     void givenManyProductsWithTheName_whenSearchingForProducts_thenOnlyReturnsTheOnesInStock() {
-        // given: some products with quantity = 0, and some > 0
+        Product productWithoutQuantity = givenProductWithQuantity(0);
+        Product productWithQuantity = givenProductWithQuantity(A_QUANTITY);
+        willReturn(List.of(productWithoutQuantity, productWithQuantity)).given(repository).findByName(anyString());
 
         List<Product> products = service.searchProducts(A_PRODUCT_NAME);
 
-        // assert only contains products in stock
+        Assertions.assertEquals(1, products.size());
+        Assertions.assertEquals(productWithQuantity, products.get(0));
     }
 
     @Test
     void whenAddingProduct_thenCreatesItWithNameAndQuantity() {
-        // given: will need to return a product from the factory here in order not to crash. Why?
+        Product product = mock(Product.class);
+        willReturn(product).given(factory).create(anyString(), anyInt());
 
         service.addProduct(A_PRODUCT_NAME, A_QUANTITY);
 
-        // assert created (factory)
+        Mockito.verify(factory).create(A_PRODUCT_NAME, A_QUANTITY);
     }
 
     @Test
     void givenItemCanBeSold_whenAddingProduct_thenSavesIt() {
-        // given: created product can be sold
+        Product productThatCanBeSold = givenProductThatCanBeSold();
+        willReturn(productThatCanBeSold).given(factory).create(anyString(), anyInt());
 
         service.addProduct(A_PRODUCT_NAME, A_QUANTITY);
 
-        // assert saved
+        verify(repository).insert(productThatCanBeSold);
     }
 
     @Test
     void givenAnItemThatCannotBeSold_whenAddingProduct_thenDoesNotSaveIt() {
-        // given: a product that cannot be sold
+        Product productThatCannotBeSold = givenProductThatCannotBeSold();
+        willReturn(productThatCannotBeSold).given(factory).create(anyString(), anyInt());
 
         service.addProduct(A_PRODUCT_NAME, A_QUANTITY);
 
-        // assert NOT saved
+        verify(repository, never()).insert(any());
     }
 
     @Test
@@ -73,7 +84,28 @@ class InventoryAppServiceTest {
 
         service.updateQuantity(A_PRODUCT_NAME, newQuantity);
 
-        // assert repo.updateQuantity was called with the right object.
+        ArgumentCaptor<UpdateQuantityRequest> captor = ArgumentCaptor.forClass(UpdateQuantityRequest.class);
+        verify(repository).updateQuantity(captor.capture());
+        Assertions.assertEquals(A_PRODUCT_NAME, captor.getValue().name());
+        Assertions.assertEquals(newQuantity, captor.getValue().quantity());
     }
 
+    private Product givenProductThatCannotBeSold() {
+        Product productThatCannotBeSold = mock(Product.class);
+        willReturn(false).given(productThatCannotBeSold).canBeSold();
+        return productThatCannotBeSold;
+    }
+
+    private Product givenProductThatCanBeSold() {
+        Product productThatCanBeSold = mock(Product.class);
+        willReturn(true).given(productThatCanBeSold).canBeSold();
+        return productThatCanBeSold;
+    }
+
+    private Product givenProductWithQuantity(int quantity) {
+        Product productWithQuantity = mock(Product.class);
+        willReturn(quantity).given(productWithQuantity).quantity();
+        return productWithQuantity;
+    }
 }
+
